@@ -1,5 +1,3 @@
-#include <torch/torch.h>
-#include <torch/script.h>
 #include <iostream>
 #include <string>
 #include "dextr.cpp"

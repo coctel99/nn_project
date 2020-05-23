@@ -12,7 +12,7 @@ find_package(Torch REQUIRED)
 find_package(OpenCV REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
-add_executable(nn-app main.cpp dextr.cpp)
+add_executable(nn-app main.cpp dextr.cpp helpers.cpp)
 target_link_libraries(nn-app "${TORCH_LIBRARIES}")
 target_link_libraries(nn-app ${OpenCV_LIBS})
 set_property(TARGET nn-app PROPERTY CXX_STANDARD 14)

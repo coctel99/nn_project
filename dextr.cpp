@@ -4,6 +4,7 @@
 #include <string>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/opencv.hpp>
+#include "helpers.cpp"
 
 static int find_dextr_bit_mask(std::string image_path, std::vector<std::vector<int>> extreme_points_double_array){
     //std::string model_file = "../resnet18.pt";
@@ -68,5 +69,21 @@ static int find_dextr_bit_mask(std::string image_path, std::vector<std::vector<i
     outputs = torch::upsample_bilinear2d(outputs, {512, 512}, true);
     outputs = outputs.to(device=c10::DeviceType::CPU);
 
+    at::Tensor pred = outputs.transpose(1, 2);
+    pred = 1 / (1 + exp(-pred));
+    pred = at::squeeze(pred);
+
+    //std::cout << "pred sizes" << pred.sizes() << std::endl;
+
+    std::vector<int> bbox = {-22, 137, 199, 259};
+
+    std::vector<std::vector<int>> bit_mask_array = crop2fullmask(pred, bbox, size);
+
+    //std::cout << "bit_mask_array sizes" << pred.sizes() << std::endl;
+
+    /* TODO
+    cv::Mat mask_image = make_masks_image(bit_mask_array);
+    image_with_bit_mask = add_mask_to_the_image(image_file, bit_mask_image)
+     */
     return 0;
 }
