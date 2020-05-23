@@ -28,9 +28,9 @@ static int find_dextr_bit_mask(std::string image_path, std::vector<std::vector<i
     std::cout << "model moved to device" << std::endl;
 
     // Open the image file.
-    // std::string image_path = "../images/dog-cat.jpg";
     cv::Mat image;
     image = cv::imread(image_path, cv::IMREAD_COLOR);
+    cv::Size im_size = {image.rows, image.cols};
     if (!image.data){
         printf("No image data \n");
         return -1;
@@ -65,7 +65,6 @@ static int find_dextr_bit_mask(std::string image_path, std::vector<std::vector<i
     // Execute the model and turn its output into a tensor.
     std::cout << "Performing forward pass" << std::endl;
     at::Tensor outputs = module.forward(inputs).toTensor();
-    std::cout << outputs.slice(/*dim=*/1, /*start=*/0, /*end=*/1) << '\n';
     outputs = torch::upsample_bilinear2d(outputs, {512, 512}, true);
     outputs = outputs.to(device=c10::DeviceType::CPU);
 
@@ -73,16 +72,21 @@ static int find_dextr_bit_mask(std::string image_path, std::vector<std::vector<i
     pred = 1 / (1 + exp(-pred));
     pred = at::squeeze(pred);
 
-    //std::cout << "pred sizes" << pred.sizes() << std::endl;
+    std::cout << "pred sizes" << pred.sizes() << std::endl;
 
-    std::vector<int> bbox = {-22, 137, 199, 259};
+    std::vector<int> bbox = {-22, 137, 119, 259};
 
-    std::vector<std::vector<int>> bit_mask_array = crop2fullmask(pred, bbox, size);
+    std::vector<std::vector<int>> bit_mask_array = crop2fullmask(pred, bbox, im_size);
 
-    //std::cout << "bit_mask_array sizes" << pred.sizes() << std::endl;
+    std::cout << "bit_mask_array sizes " << bit_mask_array.size() << " " << bit_mask_array[0].size() << std::endl;
+
+    cv::Mat bit_mask_image = make_masks_image(bit_mask_array);
+
+    //cv::namedWindow("Display Image 3", cv::WINDOW_AUTOSIZE );
+    //cv::imshow("Display Image 3", mask_image);
+    //cv::waitKey(0);
 
     /* TODO
-    cv::Mat mask_image = make_masks_image(bit_mask_array);
     image_with_bit_mask = add_mask_to_the_image(image_file, bit_mask_image)
      */
     return 0;
