@@ -31,7 +31,8 @@ static int find_dextr_bit_mask(const std::string &image_path, std::vector<std::v
     cv::Mat image;
     //std::vector<std::vector<int>> v = {{0, 1, 2, 3}, {4, 5, 6, 7}, {8, 9, 10, 11}, {12, 13, 14, 15}};
     //image = vecToMat(v);
-    image = cv::imread(image_path, cv::ImreadModes::IMREAD_COLOR);
+    //image = cv::imread(image_path, cv::ImreadModes::IMREAD_COLOR);
+    image = cv::imread(image_path, cv::ImreadModes::IMREAD_GRAYSCALE);
     cv::Size im_size = {image.rows, image.cols};
     if (!image.data){
         std::cout << "No image data" << std::endl;
@@ -108,6 +109,8 @@ static int find_dextr_bit_mask(const std::string &image_path, std::vector<std::v
     at::Tensor outputs = module.forward(inputs).toTensor();
     outputs = torch::upsample_bilinear2d(outputs, {512, 512}, true);
     outputs = outputs.to(device=c10::DeviceType::CPU);
+
+    std::cout << "Getting predictions" << std::endl;
 
     at::Tensor pred = outputs.transpose(1, 2);
     pred = 1 / (1 + exp(-pred));
