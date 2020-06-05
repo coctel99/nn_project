@@ -20,15 +20,15 @@ static  cv::Mat vecToMat(const std::vector<std::vector<int>> &vecIn) {
 
 static cv::Mat tensorToMat(at::Tensor &tensor) {
     auto sizes = tensor.sizes();
-    cv::Mat resultImg(sizes[1], sizes[0], CV_8UC1);
-    std::memcpy((void*)resultImg.data, tensor.data_ptr(), sizeof(torch::kUInt8)*tensor.numel());
+    cv::Mat resultImg(sizes[0], sizes[1], CV_8UC1);
+    std::memcpy((void*)resultImg.data, tensor.data_ptr(), sizeof(at::ScalarType::Byte)*tensor.numel());
 
     return resultImg;
 }
 
 static at::Tensor matToTensor(cv::Mat &mat) {
     at::TensorOptions options(at::ScalarType::Byte);
-    at::Tensor result = torch::from_blob(mat.data, {mat.cols, mat.rows}, options);
+    at::Tensor result = torch::from_blob(mat.data, {mat.rows, mat.cols}, options);
     //result = result.toType(torch::kUInt8);
     //result = result.toType(at::ScalarType::Float);
 
@@ -101,14 +101,14 @@ static cv::Mat crop_from_bbox(cv::Mat &img, std::vector<int> &bbox, bool zero_pa
     std::cout << "bbox_valid " << bbox_valid << std::endl;
     cv::Mat crop;
     at::Tensor img_tensor = matToTensor(img);
-    std::cout << "img_tensor sizes " << img_tensor.sizes() << ", datatype " << img_tensor.type() << std::endl;
+    std::cout << "img_tensor sizes " << img_tensor.sizes() << ", options " << img_tensor.options() << std::endl;
 
     cv::Mat img_tensor_mat = tensorToMat(img_tensor);
     if (!img_tensor_mat.data){
         std::cout << "No image data" << std::endl;
     }
 
-    std::cout << "img_tensor_mat opened " << img_tensor_mat.size << ", channels " << img_tensor_mat.channels() << std::endl;
+    std::cout << "img_tensor_mat opened " << img_tensor_mat.size << ", options " << img_tensor_mat.channels() << std::endl;
 
     //cv::namedWindow("Display img_tensor_mat", cv::WINDOW_AUTOSIZE );
     //cv::imshow("Display img_tensor_mat", img_tensor_mat);
@@ -118,6 +118,8 @@ static cv::Mat crop_from_bbox(cv::Mat &img, std::vector<int> &bbox, bool zero_pa
     // Initialize crop size (first 2 dimensions)
     at::TensorOptions options(at::ScalarType::Byte);
     at::Tensor crop_tensor = torch::zeros(torch::IntArrayRef {bbox[3] - bbox[1] + 1, bbox[2] - bbox[0] + 1}, options);
+    //crop_tensor.toType(at::ScalarType::Byte);
+    //crop_tensor = torch::transpose(crop_tensor, 0 ,1);
 
     // Offsets for x and y
     std::vector<int> offsets = {-bbox[0], -bbox[1]};
@@ -126,9 +128,7 @@ static cv::Mat crop_from_bbox(cv::Mat &img, std::vector<int> &bbox, bool zero_pa
     //assert (bbox == bbox_valid);
     //crop_tensor = torch::zeros(torch::IntArrayRef {bbox_valid[2] - bbox_valid[0] + 1, bbox_valid[3] - bbox_valid[1] + 1});
 
-    crop_tensor.toType(at::ScalarType::Byte);
-    crop_tensor = torch::transpose(crop_tensor, 0 ,1);
-    std::cout << "crop_tensor sizes " << crop_tensor.sizes() << ", datatype " << crop_tensor.type() << std::endl;
+    std::cout << "crop_tensor sizes " << crop_tensor.sizes() << ", options " << crop_tensor.options() << std::endl;
 
     cv::Mat crop_tensor_mat = tensorToMat(crop_tensor);
     cv::namedWindow("Display crop_tensor_mat", cv::WINDOW_AUTOSIZE );
@@ -136,34 +136,28 @@ static cv::Mat crop_from_bbox(cv::Mat &img, std::vector<int> &bbox, bool zero_pa
     cv::waitKey(0);
 
     //TODO add inds calculation
-    std::vector<int> inds = {22, 0, 141, 122};
+    std::vector<unsigned char> inds = {22, 0, 141, 122};
     // bbox_valid 0 137 119 259
 
     std::cout << "crop_from_bbox crop_tensor sizes " << crop_tensor.sizes() << std::endl;
     std::cout << "crop_from_bbox img_tensor sizes " << img_tensor.sizes() << std::endl;
 
+    // Code from Python:
+    //crop[inds[1]:inds[3] + 1, inds[0]:inds[2] + 1] = img[bbox_valid[1]:bbox_valid[3] + 1, bbox_valid[0]:bbox_valid[2] + 1]
+
     //crop_tensor.squeeze();
-    int height = inds[2] - inds[0] + 1;
-    int width = inds[3] - inds[1] + 1;
+    unsigned char val = 255;
+    unsigned short val2 = 255;
+    unsigned int val3 = 255;
+    //crop_tensor = crop_tensor.index_put_({torch::indexing::Slice{inds[0], inds[2]},
+    //                                      torch::indexing::Slice{inds[1], inds[3]}}, val2);
+    crop_tensor = crop_tensor.index_put_(
+            {torch::indexing::Slice{static_cast<unsigned char>(inds[1]), static_cast<unsigned char>(inds[3])},
+             torch::indexing::Slice{static_cast<unsigned char>(inds[0]), static_cast<unsigned char>(inds[2])}}, val);
 
-    std::cout << "crop_tensor height = " << height << std::endl;
-    std::cout << "crop_tensor width = " << width << std::endl;
-
-    std::cout << "crop_tensor height updated = " << height + inds[1]<< std::endl;
-    std::cout << "crop_tensor width updated = " << width + inds[0]<< std::endl;
-
-    for(int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-            //if (i == 0) {
-                //std::cout << "crop_tensor[" << i + inds[0] << "][" << j + inds[1] << "] = " << crop_tensor[i + inds[0]][j + inds[1]] << std::endl;
-                //std::cout << "img_tensor[" << i + bbox_valid[0] << "][" << j + bbox_valid[1] << "] = "
-                //          << img_tensor[i + bbox_valid[0]][j + bbox_valid[1]] << std::endl;
-            //}
-            crop_tensor[i + inds[0]][j + inds[1]] = img_tensor[i + bbox_valid[0]][j + bbox_valid[1]];
-            img_tensor[i][j] = 255; // WTF ARE THESE STRIPES
-            //crop_tensor[i + inds[0]][j + inds[1]] = 255;
-        }
-    }
+    img_tensor = img_tensor.index_put_(
+            {torch::indexing::Slice{bbox_valid[1], bbox_valid[3]},
+             torch::indexing::Slice{bbox_valid[0], bbox_valid[2]}}, val);
 
     std::cout << "tensorToMat..."<< std::endl;
     crop = tensorToMat(crop_tensor);
