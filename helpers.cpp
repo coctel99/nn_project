@@ -125,9 +125,6 @@ static cv::Mat crop_from_bbox(cv::Mat &img, std::vector<int> &bbox, bool zero_pa
     std::vector<int> offsets = {-bbox[0], -bbox[1]};
     std::cout << "offsets " << offsets << std::endl;
 
-    //assert (bbox == bbox_valid);
-    //crop_tensor = torch::zeros(torch::IntArrayRef {bbox_valid[2] - bbox_valid[0] + 1, bbox_valid[3] - bbox_valid[1] + 1});
-
     std::cout << "crop_tensor sizes " << crop_tensor.sizes() << ", options " << crop_tensor.options() << std::endl;
 
     cv::Mat crop_tensor_mat = tensorToMat(crop_tensor);
@@ -136,7 +133,7 @@ static cv::Mat crop_from_bbox(cv::Mat &img, std::vector<int> &bbox, bool zero_pa
     cv::waitKey(0);
 
     //TODO add inds calculation
-    std::vector<unsigned char> inds = {22, 0, 141, 122};
+    std::vector<int> inds = {22, 0, 141, 122};
     // bbox_valid 0 137 119 259
 
     std::cout << "crop_from_bbox crop_tensor sizes " << crop_tensor.sizes() << std::endl;
@@ -146,34 +143,20 @@ static cv::Mat crop_from_bbox(cv::Mat &img, std::vector<int> &bbox, bool zero_pa
     //crop[inds[1]:inds[3] + 1, inds[0]:inds[2] + 1] = img[bbox_valid[1]:bbox_valid[3] + 1, bbox_valid[0]:bbox_valid[2] + 1]
 
     //crop_tensor.squeeze();
-    unsigned char val = 255;
-    unsigned short val2 = 255;
-    unsigned int val3 = 255;
-    //crop_tensor = crop_tensor.index_put_({torch::indexing::Slice{inds[0], inds[2]},
-    //                                      torch::indexing::Slice{inds[1], inds[3]}}, val2);
     crop_tensor = crop_tensor.index_put_(
-            {torch::indexing::Slice{static_cast<unsigned char>(inds[1]), static_cast<unsigned char>(inds[3])},
-             torch::indexing::Slice{static_cast<unsigned char>(inds[0]), static_cast<unsigned char>(inds[2])}}, val);
-
-    img_tensor = img_tensor.index_put_(
-            {torch::indexing::Slice{bbox_valid[1], bbox_valid[3]},
-             torch::indexing::Slice{bbox_valid[0], bbox_valid[2]}}, val);
+            {torch::indexing::Slice{inds[1], inds[3]},
+             torch::indexing::Slice{inds[0], inds[2]}},
+            img_tensor.index(
+             {torch::indexing::Slice{bbox_valid[1], bbox_valid[3]},
+                     torch::indexing::Slice{bbox_valid[0], bbox_valid[2]}}));
 
     std::cout << "tensorToMat..."<< std::endl;
     crop = tensorToMat(crop_tensor);
 
+    std::cout << "crop opened " << crop.size << ", channels " << crop.channels() << std::endl;
     cv::namedWindow("Display crop", cv::WINDOW_AUTOSIZE );
     cv::imshow("Display crop", crop);
     cv::waitKey(0);
-    std::cout << "crop opened " << crop.size << ", channels " << crop.channels() << std::endl;
-
-    std::cout << "tensorToMat..."<< std::endl;
-    cv::Mat imgTest = tensorToMat(img_tensor);
-
-    cv::namedWindow("Display imgTest", cv::WINDOW_AUTOSIZE );
-    cv::imshow("Display imgTest", imgTest);
-    cv::waitKey(0);
-    std::cout << "imgTest opened " << imgTest.size << ", channels " << imgTest.channels() << std::endl;
 
     return crop;
 }
