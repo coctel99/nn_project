@@ -1,12 +1,13 @@
 #include <torch/torch.h>
 #include <torch/script.h>
 #include <iostream>
+#include <algorithm>
 #include <string>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/opencv.hpp>
 #include "helpers.cpp"
 
-static int find_dextr_bit_mask(const std::string &image_path, std::vector<std::vector<int>> extreme_points_double_array){
+static int find_dextr_bit_mask(const std::string &image_path, const std::vector<std::vector<int>> &extreme_points_double_array){
     //std::string model_file = "../resnet18.pt";
     std::string model_file = "../traced_model_gpu.pt";
     //std::string model_file = "../traced_model_cpu.pt";
@@ -44,19 +45,20 @@ static int find_dextr_bit_mask(const std::string &image_path, std::vector<std::v
     std::cout << "Image opened " << image.size << ", channels " << image.channels() << std::endl;
 
     // Crop image to the bounding box from the extreme points and resize
+    // TODO: add bbox calculation
     std::vector<int> bbox = {-22, 137, 119, 259};
     cv::Mat crop_image = crop_from_bbox(image, bbox, true);
     cv::Mat resize_image;
+    std::vector<std::vector<int>> extreme_points = extreme_points_double_array;
 
     cv::resize(image, resize_image, cv::Size(512, 512));
-
     std::cout << "Image resized " << resize_image.size <<  ", channels " << resize_image.channels() << std::endl;
 
     // Generate extreme point heat map normalized to image values
     int minVal0 = INT_MAX;
     int minVal1 = INT_MAX;
     int PAD = 50;
-    for(auto & i : extreme_points_double_array) {
+    for(auto & i : extreme_points) {
         if (i[0] < minVal0){
             minVal0 = i[0];
         }
@@ -65,26 +67,20 @@ static int find_dextr_bit_mask(const std::string &image_path, std::vector<std::v
         }
     }
 
-    std::cout << "cropsize " << crop_image.size() <<  ", channels " << crop_image.channels() << std::endl;
-
-
-    std::vector<std::vector<int>> extreme_points = extreme_points_double_array;
-    for(int i = 0; i < extreme_points.size(); i++){
-        std::cout << "extreme_points[" << i << "]" << extreme_points[i][0] << ", " << extreme_points[i][1] << std::endl;
-        //extreme_points[i][0] = 512 * (extreme_points[i][0] - minVal0 + PAD) * [1 / crop_image.size(), 1 / crop_image.size()[0]];
-        //extreme_points[i][1] = extreme_points[i][1] - minVal1 + PAD;
-        // (512 * extreme_points * [1 / crop_image.shape[1], 1 / crop_image.shape[0]])
-        std::cout << "extreme_points[" << i << "]" << extreme_points[i][0] << ", " << extreme_points[i][1] << std::endl;
-        std::cout << std::endl;
+    for(auto & extreme_point : extreme_points){
+        extreme_point[0] = (int) 512 * (extreme_point[0] - minVal0 + PAD) * ((float) 1 / crop_image.size().width);
+        extreme_point[1] = (int) 512 * (extreme_point[1] - minVal1 + PAD) * ((float) 1 / crop_image.size().height);
+        //std::cout << "extreme_points[" << i << "] " << extreme_points[i][0] << ", " << extreme_points[i][1]<< std::endl;
+        //std::cout << std::endl;
     }
 
     std::cout << "Extreme points ok" << std::endl;
 
-    std::vector<std::vector<float>> extreme_heatmap;
+    at::Tensor extreme_heatmap;
     extreme_heatmap = make_gt(resize_image, extreme_points, 10);
     //extreme_heatmap = helpers.cstm_normalize(extreme_heatmap, 255)
 
-    std::cout << "Extreme heatmap ok " << extreme_heatmap.size() << std::endl;
+    std::cout << "Extreme heatmap ok " << extreme_heatmap.sizes() << std::endl;
 
     // Open image as tensor.
     //at::IntArrayRef sizes = {1, 4, 512, 512};
