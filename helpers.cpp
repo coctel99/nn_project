@@ -26,17 +26,21 @@ static  at::Tensor vecToTensor(const std::vector<std::vector<int>> &vector) {
 
 static cv::Mat tensorToMat(at::Tensor &tensor) {
     auto sizes = tensor.sizes();
-    cv::Mat result(sizes[0], sizes[1], CV_8UC1);
-    std::memcpy((void*)result.data, tensor.data_ptr(), sizeof(at::ScalarType::Byte)*tensor.numel());
-
-    return result;
+    if(tensor.dim() == 2){
+        cv::Mat result(sizes[0], sizes[1], CV_8UC1);
+        std::memcpy((void*)result.data, tensor.data_ptr(), sizeof(at::ScalarType::Byte)*tensor.numel());
+        return result;
+    } else if(tensor.dim() == 3){
+        cv::Mat result(sizes[0], sizes[1], CV_8UC3);
+        std::memcpy((void*)result.data, tensor.data_ptr(), sizeof(at::ScalarType::Byte)*tensor.numel());
+        return result;
+    }
+    throw std::exception("Wrong tensor format");
 }
 
 static at::Tensor matToTensor(cv::Mat &mat) {
     at::TensorOptions options(at::ScalarType::Byte);
-    at::Tensor result = torch::from_blob(mat.data, {mat.rows, mat.cols}, options);
-    //result = result.toType(torch::kUInt8);
-    //result = result.toType(at::ScalarType::Float);
+    at::Tensor result = torch::from_blob(mat.data, {mat.rows, mat.cols, mat.channels()}, options);
 
     return result;
 }
@@ -103,7 +107,7 @@ static cv::Mat crop_from_bbox(cv::Mat &img, std::vector<int> &bbox, bool zero_pa
     // if zero_pad
     // Initialize crop size (first 2 dimensions)
     at::TensorOptions options(at::ScalarType::Byte);
-    at::Tensor crop_tensor = torch::zeros(torch::IntArrayRef {bbox[3] - bbox[1] + 1, bbox[2] - bbox[0] + 1}, options);
+    at::Tensor crop_tensor = torch::zeros(torch::IntArrayRef {bbox[3] - bbox[1] + 1, bbox[2] - bbox[0] + 1, img.channels()}, options);
     //crop_tensor.toType(at::ScalarType::Byte);
     //crop_tensor = torch::transpose(crop_tensor, 0 ,1);
 
@@ -142,14 +146,6 @@ static cv::Mat crop_from_bbox(cv::Mat &img, std::vector<int> &bbox, bool zero_pa
     return crop;
 }
 
-static cv::Mat make_masks_image(std::vector<std::vector<int>> &results) {
-    //cv::Mat mask_image(width, height, CV_8UC3, cv::Scalar(0, 0, 0));
-    cv::Mat mask_image = vecToMat(results);
-    std::cout << "mask_image size: " << mask_image.size << std::endl;
-
-    return mask_image;
-}
-
 static at::Tensor make_gaussian(const std::vector<int> &size, const std::vector<int> &center, int sigma=10){
     std::cout << "make_gaussian..." << std::endl;
     int x0;
@@ -174,10 +170,10 @@ static at::Tensor make_gaussian(const std::vector<int> &size, const std::vector<
     std::cout << "gauss x0, y0: " << x0 << " " << y0 << std::endl;
 
     //at::Tensor gauss = torch::zeros(torch::IntArrayRef {size[0], size[1]}, options);
-    at::Tensor gauss = torch::exp( -4 * log(2) * (pow((x - x0), 2) + pow((y - y0), 2)) / pow(sigma, 2));
+    at::Tensor gauss = 255 * torch::exp( -4 * log(2) * (pow((x - x0), 2) + pow((y - y0), 2)) / pow(sigma, 2));
     std::cout << "gauss sizes: " << gauss.sizes() << ", options: " << gauss.options() << std::endl;
 
-    at::Tensor gauss_mat_tensor = (255 * gauss).to(at::ScalarType::Byte);
+    at::Tensor gauss_mat_tensor = gauss.to(at::ScalarType::Byte);
     cv::Mat gauss_mat = tensorToMat(gauss_mat_tensor);
     std::cout << "crop gauss_mat " << gauss_mat.size << ", channels " << gauss_mat.channels() << std::endl;
     cv::namedWindow("Display gauss_mat", cv::WINDOW_AUTOSIZE );
@@ -203,13 +199,9 @@ static at::Tensor make_gt(const cv::Mat &img, const std::vector<std::vector<int>
         std::cout << "make_gt: lables.empty()" << std::endl;
         gt = make_gaussian({h, w}, {h / 2, w / 2}, sigma=sigma);
     } else {
-        if (lables.size() == 1) {
-            // labels = labels[np.newaxis]
-        }
         //gt.emplace_back(torch::zeros({h, w}));
         for (const auto & lable : lables) {
             std::cout << "torch::max..."<< std::endl;
-            //gt = torch::max(gt, make_gaussian({h, w}, {lable[0], lable[1]}, sigma));
             gt = torch::max(gt, make_gaussian({h, w}, {lable[0], lable[1]}, sigma));
             std::cout << "make_gt: make_gaussian with size " << h << ", " << w << " and center in " << lable[0] << ", " << lable[1] << std::endl;
 
@@ -217,7 +209,7 @@ static at::Tensor make_gt(const cv::Mat &img, const std::vector<std::vector<int>
     }
 
     std::cout << "tensorToMat..."<< std::endl;
-    at::Tensor gauss_mat_tensor = (255 * gt).to(at::ScalarType::Byte);
+    at::Tensor gauss_mat_tensor = gt.to(at::ScalarType::Byte);
     cv::Mat gt_mat = tensorToMat(gauss_mat_tensor);
 
     std::cout << "gt_mat opened " << gt_mat.size << ", channels " << gt_mat.channels() << std::endl;

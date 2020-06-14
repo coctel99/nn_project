@@ -29,11 +29,8 @@ static int find_dextr_bit_mask(const std::string &image_path, const std::vector<
     std::cout << "model moved to device" << std::endl;
 
     // Open the image file.
-    cv::Mat image;
-    //std::vector<std::vector<int>> v = {{0, 1, 2, 3}, {4, 5, 6, 7}, {8, 9, 10, 11}, {12, 13, 14, 15}};
-    //image = vecToMat(v);
-    //image = cv::imread(image_path, cv::ImreadModes::IMREAD_COLOR);
-    image = cv::imread(image_path, cv::ImreadModes::IMREAD_GRAYSCALE);
+    cv::Mat image = cv::imread(image_path, cv::ImreadModes::IMREAD_COLOR);
+    //image = cv::imread(image_path, cv::ImreadModes::IMREAD_GRAYSCALE);
     cv::Size im_size = {image.rows, image.cols};
     if (!image.data){
         std::cout << "No image data" << std::endl;
@@ -85,6 +82,7 @@ static int find_dextr_bit_mask(const std::string &image_path, const std::vector<
     // Open image as tensor.
     //at::IntArrayRef sizes = {1, 4, 512, 512};
     at::Tensor tensor_image = matToTensor(resize_image);
+    at::Tensor input_dextr = torch::cat({tensor_image, extreme_heatmap}, 2);
 
     //std::vector<int64_t> sizes = {1, 4, 512, 512};
     //at::TensorOptions options(at::ScalarType::Byte);
