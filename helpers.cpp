@@ -176,9 +176,11 @@ static at::Tensor make_gaussian(const std::vector<int> &size, const std::vector<
     at::Tensor gauss_mat_tensor = gauss.to(at::ScalarType::Byte);
     cv::Mat gauss_mat = tensorToMat(gauss_mat_tensor);
     std::cout << "crop gauss_mat " << gauss_mat.size << ", channels " << gauss_mat.channels() << std::endl;
+    /*
     cv::namedWindow("Display gauss_mat", cv::WINDOW_AUTOSIZE );
     cv::imshow("Display gauss_mat", gauss_mat);
     cv::waitKey(0);
+     */
 
     return gauss;
 };

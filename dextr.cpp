@@ -81,20 +81,20 @@ static int find_dextr_bit_mask(const std::string &image_path, const std::vector<
 
     // Open image as tensor.
     //at::IntArrayRef sizes = {1, 4, 512, 512};
-    at::Tensor tensor_image = matToTensor(resize_image);
+    at::Tensor tensor_image = matToTensor(resize_image).to(torch::kFloat32);
+    std::cout << "tensor_image sizes " << tensor_image.sizes() << ", options " << tensor_image.options() << std::endl;
+    std::cout << "extreme_heatmap sizes " << extreme_heatmap.sizes() << ", options " << extreme_heatmap.options() << std::endl;
+
+    extreme_heatmap = extreme_heatmap.reshape({512, 512, 1});
+    std::cout << "extreme_heatmap sizes " << extreme_heatmap.sizes() << ", options " << extreme_heatmap.options() << std::endl;
+
     at::Tensor input_dextr = torch::cat({tensor_image, extreme_heatmap}, 2);
+    std::cout << "input_dextr sizes " << input_dextr.sizes() << ", options " << input_dextr.options() << std::endl;
 
-    //std::vector<int64_t> sizes = {1, 4, 512, 512};
-    //at::TensorOptions options(at::ScalarType::Byte);
-    //at::Tensor tensor_image = torch::from_blob(image.data, at::IntList(sizes), options);
-    //tensor_image = tensor_image.toType(at::kFloat);
-
-    std::cout << "Image to tensor " << tensor_image.sizes() << std::endl;
-
-    //Create a vector of inputs.
+    // Create a vector of inputs.
     std::vector<torch::jit::IValue> inputs;
     //inputs.push_back(torch::ones({1, 4, 512, 512}).to(device));
-    inputs.emplace_back(tensor_image.to(device));
+    inputs.emplace_back(input_dextr.transpose(2, 0).unsqueeze(0).to(device));
 
     std::cout << "Tensor to gpu" << std::endl;
 
@@ -110,8 +110,11 @@ static int find_dextr_bit_mask(const std::string &image_path, const std::vector<
     pred = 1 / (1 + exp(-pred));
     pred = at::squeeze(pred);
 
+    pred = 255 * pred;
+    pred = pred.to(at::ScalarType::Byte);
+    cv::Mat pred_mat = tensorToMat(pred);
     cv::namedWindow("pred image", cv::WINDOW_AUTOSIZE );
-    cv::imshow("pred image", tensorToMat(pred));
+    cv::imshow("pred image", pred_mat);
     cv::waitKey(0);
 
     std::cout << "pred sizes" << pred.sizes() << std::endl;
